@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SHIP IT: Code Roast (10 minutes)</title>
+  <style>
+    :root{
+      --bg:#0b1020; --card:#121a33; --line:#263055; --txt:#e8eefc;
+      --muted:rgba(232,238,252,.75); --acc:#4f7cff; --good:#86efac; --bad:#fca5a5;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt)}
+    .wrap{max-width:760px;margin:0 auto;padding:16px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}
+    .top{display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between;align-items:center;margin-bottom:10px}
+    .pill{display:inline-flex;gap:8px;align-items:center;padding:8px 12px;border-radius:999px;background:#0b1020;border:1px solid var(--line)}
+    .title{font-size:20px;font-weight:800;margin:6px 0 8px}
+    .muted{color:var(--muted)}
+    .code{
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+      background:#0b1020;border:1px solid var(--line);border-radius:14px;padding:12px;
+      white-space:pre-wrap;word-break:break-word;line-height:1.25;
+    }
+    .grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:12px}
+    .btnrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+    button,input,select{font-size:16px;border-radius:14px;border:1px solid var(--line);padding:12px}
+    input,select{background:#0b1020;color:var(--txt);flex:1;min-width:180px}
+    button{background:#0b1020;color:var(--txt);font-weight:800;cursor:pointer}
+    button.primary{background:var(--acc);border-color:transparent;color:#fff}
+    button.choice{width:100%;text-align:left}
+    button.choice.correct{outline:2px solid rgba(134,239,172,.55)}
+    button.choice.wrong{outline:2px solid rgba(252,165,165,.55)}
+    .ok{color:var(--good);font-weight:800}
+    .bad{color:var(--bad);font-weight:800}
+    .small{font-size:13px}
+    .hr{height:1px;background:var(--line);margin:14px 0}
+
+    .confetti{
+      position:fixed;inset:0;pointer-events:none;overflow:hidden;display:none;
+    }
+    .confetti i{
+      position:absolute;top:-10vh;width:10px;height:16px;border-radius:3px;opacity:.9;
+      animation:fall linear forwards;
+    }
+    @keyframes fall{
+      to{transform:translateY(120vh) rotate(720deg);opacity:1}
+    }
+  </style>
+</head>
+<body>
+  <div class="confetti" id="confetti"></div>
+
+  <div class="wrap">
+    <div class="card">
+      <div class="top">
+        <div class="pill" id="meta">Start</div>
+        <div class="pill" id="clock">08:00</div>
+      </div>
+
+      <div class="title" id="h">SHIP IT: Code Roast</div>
+      <div class="muted" id="desc">10 minutes, one phone, one player, zero shame.</div>
+
+      <div id="content" style="margin-top:12px;"></div>
+
+      <div id="choices" class="grid"></div>
+
+      <div class="btnrow" id="actions"></div>
+
+      <div id="msg" class="muted" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="muted small" style="margin-top:10px;">
+      Host tip: open the page via QR code, say “you choose the mode”, and just watch the nervous laughter.
+    </div>
+  </div>
+
+<script>
+  const TOTAL_TIME_SEC = 8 * 60;
+  const QUESTIONS_PER_RUN = 8;
+
+  const bank = [
+    {
+      id:"js_e_1", level:"easy", lang:"js",
+      title:"JS: what logs?",
+      code:`let x = 2;
+for (let i = 0; i < 3; i++) x += i;
+console.log(x);`,
+      answers:["3","4","5","6"],
+      correct:2,
+      hint:"You add i = 0, 1, 2.",
+      explain:"x = 2 + 0 + 1 + 2 = 5."
+    },
+    {
+      id:"py_e_1", level:"easy", lang:"py",
+      title:"Python: strings",
+      code:`s = "ha"
+print(s * 3)`,
+      answers:["hahaha","ha3","ha ha ha","error"],
+      correct:0,
+      hint:"Multiplying a string repeats it.",
+      explain:`"ha" * 3 gives "hahaha".`
+    },
+    {
+      id:"js_e_2", level:"easy", lang:"js",
+      title:"JS: arrays",
+      code:`const a = ["re","le","ase"];
+console.log(a.join("-"));`,
+      answers:["re-le-ase","rele-ase","re,le,ase","error"],
+      correct:0,
+      hint:"join combines items with a separator.",
+      explain:"join(\"-\") combines them with a hyphen."
+    },
+    {
+      id:"py_e_2", level:"easy", lang:"py",
+      title:"Python: slicing",
+      code:`a = [1,2,3,4,5]
+print(a[1:4])`,
+      answers:["[1,2,3,4]","[2,3,4]","[2,3,4,5]","[1:4]"],
+      correct:1,
+      hint:"Slice: left bound included, right bound excluded.",
+      explain:"It takes elements with indices 1, 2, 3."
+    },
+    {
+      id:"js_e_3", level:"easy", lang:"js",
+      title:"JS: condition",
+      code:`let n = 7;
+let ok = (n % 2 === 0) || (n > 10);
+console.log(ok);`,
+      answers:["true","false","7","NaN"],
+      correct:1,
+      hint:"7 is not even and not greater than 10.",
+      explain:"Both conditions are false, so result is false."
+    },
+    {
+      id:"py_e_3", level:"easy", lang:"py",
+      title:"Python: range",
+      code:`s = 0
+for i in range(1, 4):
+    s += i
+print(s)`,
+      answers:["6","7","10","error"],
+      correct:0,
+      hint:"range(1,4) means 1, 2, 3.",
+      explain:"1+2+3=6."
+    },
+
+    {
+      id:"js_h_1", level:"hard", lang:"js",
+      title:"JS: language meme",
+      code:`console.log([] == ![]);`,
+      answers:["true","false","[]","error"],
+      correct:0,
+      hint:"This is the classic “why did I choose programming” moment.",
+      explain:"![] -> false, and [] == false becomes true because of type coercion."
+    },
+    {
+      id:"py_h_1", level:"hard", lang:"py",
+      title:"Python: sneaky default",
+      code:`def add(x, a=[]):
+    a.append(x)
+    return a
+
+print(add(1))
+print(add(2))`,
+      answers:["[1] and [2]","[1] and [1,2]","[1,2] and [1,2]","error"],
+      correct:1,
+      hint:"The default list is created only once.",
+      explain:"a is shared between calls, so the second output is [1,2]."
+    },
+    {
+      id:"js_h_2", level:"hard", lang:"js",
+      title:"JS: == vs ===",
+      code:`console.log("0" == 0, "0" === 0);`,
+      answers:["true true","false false","true false","false true"],
+      correct:2,
+      hint:"== coerces types, === does not.",
+      explain:"\"0\" == 0 -> true, but strict equality -> false."
+    },
+    {
+      id:"py_h_2", level:"hard", lang:"py",
+      title:"Python: float gotcha",
+      code:`print(0.1 + 0.2 == 0.3)`,
+      answers:["True","False","0.3","error"],
+      correct:1,
+      hint:"Binary precision keeps life interesting.",
+      explain:"Because of float representation, the comparison is often False."
+    },
+    {
+      id:"js_h_3", level:"hard", lang:"js",
+      title:"JS: closure",
+      code:`const a = [];
+for (var i = 0; i < 3; i++) {
+  a.push(() => i);
+}
+console.log(a[0](), a[1](), a[2]());`,
+      answers:["0 1 2","3 3 3","2 2 2","error"],
+      correct:1,
+      hint:"var is shared across all iterations.",
+      explain:"After the loop i = 3, all functions return 3."
+    },
+    {
+      id:"py_h_3", level:"hard", lang:"py",
+      title:"Python: generator",
+      code:`g = (i*i for i in range(3))
+print(list(g))
+print(list(g))`,
+      answers:["[0,1,4] and [0,1,4]","[0,1,4] and []","[] and []","error"],
+      correct:1,
+      hint:"A generator is one-time use.",
+      explain:"After the first list(g), the generator is exhausted."
+    }
+  ];
+
+  const $ = (id) => document.getElementById(id);
+
+  const st = {
+    screen:"start",
+    name:"",
+    level:"easy",
+    lang:"mix",
+    score:0,
+    usedHints:0,
+    timeLeft:TOTAL_TIME_SEC,
+    timer:null,
+    q:[],
+    idx:0
+  };
+
+  function shuffle(arr){
+    for(let i=arr.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [arr[i],arr[j]]=[arr[j],arr[i]];
+    }
+    return arr;
+  }
+
+  function fmt(sec){
+    const m = String(Math.floor(sec/60)).padStart(2,"0");
+    const s = String(sec%60).padStart(2,"0");
+    return `${m}:${s}`;
+  }
+
+  function setTop(){
+    const total = st.q.length || QUESTIONS_PER_RUN;
+    if(st.screen === "play"){
+      $("meta").textContent = `Question ${Math.min(st.idx+1,total)}/${total} • Score ${st.score}`;
+    } else if(st.screen === "end"){
+      $("meta").textContent = `Finish • Score ${st.score}`;
+    } else {
+      $("meta").textContent = "Start";
+    }
+    $("clock").textContent = fmt(st.timeLeft);
+  }
+
+  function renderStart(){
+    st.screen = "start";
+    setTop();
+    $("h").textContent = "SHIP IT: Code Roast";
+    $("desc").textContent = "Choose a mode, answer questions, earn a title. No hard feelings, just code.";
+    $("msg").textContent = "";
+
+    $("content").innerHTML = `
+      <div class="hr"></div>
+      <div class="muted">Name (or callsign):</div>
+      <div class="btnrow" style="margin-top:10px;">
+        <input id="name" placeholder="e.g., Linter-3000" />
+      </div>
+      <div class="muted" style="margin-top:10px;">Mode:</div>
+      <div class="btnrow" style="margin-top:10px;">
+        <button id="easy" class="primary">Light</button>
+        <button id="hard">Brutal</button>
+        <button id="mix">Mix</button>
+      </div>
+      <div class="muted" style="margin-top:10px;">Question language:</div>
+      <div class="btnrow" style="margin-top:10px;">
+        <button id="langmix" class="primary">JS + Python</button>
+        <button id="langjs">JS only</button>
+        <button id="langpy">Python only</button>
+      </div>
+      <div class="hr"></div>
+      <div class="muted small">
+        Hints: 2 per game. Each hint costs 5 points. Not fair, but that's life.
+      </div>
+    `;
+    $("choices").innerHTML = "";
+    $("actions").innerHTML = `<button class="primary" id="go">Let's go</button>`;
+
+    const setLevel = (v) => { st.level = v; highlight(); };
+    const setLang  = (v) => { st.lang  = v; highlight(); };
+
+    const highlight = () => {
+      const lvl = {easy:"easy", hard:"hard", mix:"mix"};
+      ["easy","hard","mix"].forEach(id => $(id).classList.toggle("primary", lvl[st.level]===id));
+      const lng = {mix:"langmix", js:"langjs", py:"langpy"};
+      ["langmix","langjs","langpy"].forEach(id => $(id).classList.toggle("primary", lng[st.lang]===id));
+    };
+
+    $("easy").onclick = () => setLevel("easy");
+    $("hard").onclick = () => setLevel("hard");
+    $("mix").onclick  = () => setLevel("mix");
+
+    $("langmix").onclick = () => setLang("mix");
+    $("langjs").onclick  = () => setLang("js");
+    $("langpy").onclick  = () => setLang("py");
+
+    $("go").onclick = () => startGame();
+  }
+
+  function pickQuestions(){
+    let pool = bank.slice();
+
+    if(st.level !== "mix") pool = pool.filter(x => x.level === st.level);
+    if(st.lang  !== "mix") pool = pool.filter(x => x.lang === st.lang);
+
+    pool = shuffle(pool);
+
+    const picked = pool.slice(0, Math.min(QUESTIONS_PER_RUN, pool.length));
+
+    if(picked.length < QUESTIONS_PER_RUN){
+      const extras = shuffle(bank.filter(x => st.lang === "mix" ? true : x.lang === st.lang))
+        .slice(0, QUESTIONS_PER_RUN - picked.length);
+      return picked.concat(extras);
+    }
+    return picked;
+  }
+
+  function startTimer(){
+    clearInterval(st.timer);
+    st.timer = setInterval(() => {
+      st.timeLeft -= 1;
+      setTop();
+      if(st.timeLeft <= 0){
+        st.timeLeft = 0;
+        clearInterval(st.timer);
+        finish("Time is up. Production won't wait.");
+      }
+    }, 1000);
+  }
+
+  function startGame(){
+    const nameInput = document.getElementById("name");
+    st.name = (nameInput?.value || "").trim() || "Anonymous developer";
+    st.score = 0;
+    st.usedHints = 0;
+    st.timeLeft = TOTAL_TIME_SEC;
+    st.q = pickQuestions();
+    st.idx = 0;
+    st.screen = "play";
+    startTimer();
+    renderQuestion();
+  }
+
+  function renderQuestion(){
+    setTop();
+    const q = st.q[st.idx];
+    $("h").textContent = q.title;
+    $("desc").textContent = `Player: ${st.name} • Mode: ${st.level.toUpperCase()} • Language: ${st.lang.toUpperCase()}`;
+    $("msg").textContent = "";
+
+    $("content").innerHTML = `
+      <div class="code"></div>
+      <div class="muted small" style="margin-top:10px;">
+        Correct answer: +10 (Light), +20 (Brutal/Mix). Hint: -5 points.
+      </div>
+    `;
+    $("content").querySelector(".code").textContent = q.code;
+
+    $("choices").innerHTML = "";
+    q.answers.forEach((t, i) => {
+      const b = document.createElement("button");
+      b.className = "choice";
+      b.textContent = t;
+      b.onclick = () => answer(i);
+      $("choices").appendChild(b);
+    });
+
+    const canHint = st.usedHints < 2;
+    $("actions").innerHTML = `
+      <button id="hint" ${canHint ? "" : "disabled"}>Hint (${2 - st.usedHints} left)</button>
+      <button id="skip">Skip</button>
+    `;
+    $("hint").onclick = () => useHint();
+    $("skip").onclick = () => skip();
+  }
+
+  function lockChoices(){
+    [...$("choices").querySelectorAll("button.choice")].forEach(b => b.disabled = true);
+  }
+
+  function answer(i){
+    const q = st.q[st.idx];
+    lockChoices();
+
+    const buttons = [...$("choices").querySelectorAll("button.choice")];
+    buttons.forEach((b, idx) => {
+      if(idx === q.correct) b.classList.add("correct");
+      if(idx === i && i !== q.correct) b.classList.add("wrong");
+    });
+
+    const base = (st.level === "easy") ? 10 : 20;
+    const got = (i === q.correct) ? base : 0;
+    st.score += got;
+
+    const verdict = (i === q.correct) ? "Deployed. Prod survives for now." : "Nope. That was a local confidence test.";
+    const tag = (i === q.correct) ? "ok" : "bad";
+    $("msg").innerHTML = `<span class="${tag}">${verdict}</span> <span class="muted">${q.explain}</span>`;
+
+    setTop();
+
+    setTimeout(() => {
+      st.idx += 1;
+      if(st.idx >= st.q.length) finish("Round complete.");
+      else renderQuestion();
+    }, 900);
+  }
+
+  function useHint(){
+    if(st.usedHints >= 2) return;
+    const q = st.q[st.idx];
+    st.usedHints += 1;
+    st.score -= 5;
+    $("msg").innerHTML = `<span class="muted"><span class="bad">Hint:</span> ${q.hint} (-5 points)</span>`;
+    setTop();
+    $("hint").disabled = true;
+  }
+
+  function skip(){
+    lockChoices();
+    $("msg").innerHTML = `<span class="muted">Skipped. Sometimes that's the healthiest choice.</span>`;
+    setTimeout(() => {
+      st.idx += 1;
+      if(st.idx >= st.q.length) finish("Round complete.");
+      else renderQuestion();
+    }, 500);
+  }
+
+  function titleByScore(score){
+    if(score >= 130) return "Production Legend";
+    if(score >= 90) return "Bracket Team Lead";
+    if(score >= 60) return "Confident Junior";
+    if(score >= 30) return "Local Tester";
+    return "The person who clicked ‘Run’ and is already a hero";
+  }
+
+  function confetti(){
+    const c = $("confetti");
+    c.innerHTML = "";
+    c.style.display = "block";
+    const colors = ["#4f7cff","#86efac","#fca5a5","#fbbf24","#a78bfa"];
+    for(let i=0;i<80;i++){
+      const el = document.createElement("i");
+      el.style.left = Math.random()*100 + "vw";
+      el.style.background = colors[Math.floor(Math.random()*colors.length)];
+      el.style.animationDuration = (2.2 + Math.random()*2.2) + "s";
+      el.style.animationDelay = (Math.random()*0.25) + "s";
+      el.style.transform = `translateY(0) rotate(${Math.random()*180}deg)`;
+      el.style.opacity = String(0.7 + Math.random()*0.3);
+      c.appendChild(el);
+    }
+    setTimeout(() => { c.style.display = "none"; }, 3200);
+  }
+
+  function finish(reason){
+    clearInterval(st.timer);
+    st.screen = "end";
+    setTop();
+
+    const t = titleByScore(st.score);
+    $("h").textContent = "SHIP IT. Or at least TRY IT.";
+    $("desc").textContent = `Reason: ${reason}`;
+    $("choices").innerHTML = "";
+    $("actions").innerHTML = `<button class="primary" id="again">Again</button>`;
+
+    $("content").innerHTML = `
+      <div class="hr"></div>
+      <div class="title" style="margin:0 0 8px;">Result</div>
+      <div class="muted">Player: <b>${escapeHtml(st.name)}</b></div>
+      <div class="muted">Score: <b>${st.score}</b></div>
+      <div class="muted">Title: <b>${t}</b></div>
+      <div class="muted">Hints used: <b>${st.usedHints}/2</b></div>
+      <div class="muted">Time left: <b>${fmt(st.timeLeft)}</b></div>
+      <div class="hr"></div>
+      <div class="muted small">
+        Host note: to keep it festive, you can give a prize for any title except the last one. The last place gets to choose the break-time music.
+      </div>
+    `;
+    $("again").onclick = () => renderStart();
+    confetti();
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[c]));
+  }
+
+  renderStart();
+</script>
+</body>
+</html>
